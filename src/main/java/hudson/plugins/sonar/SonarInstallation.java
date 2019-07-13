@@ -35,220 +35,264 @@ import org.kohsuke.stapler.DataBoundConstructor;
 
 public class SonarInstallation implements Serializable {
 
-  private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-  public static final String DEFAULT_SERVER_URL = "http://localhost:9000";
+    public static final String DEFAULT_SERVER_URL = "http://localhost:9000";
 
-  private final String name;
-  private final String serverUrl;
+    private String name;
+    private String serverUrl;
 
-  /**
-   * @since 2.9
-   */
-  private String credentialsId;
+    /**
+     * @since 2.9
+     */
+    private String credentialsId;
 
-  /**
-   * @deprecated since 2.9 replaced by {@link #credentialsId}
-   */
-  @Deprecated
-  private Secret serverAuthenticationToken;
+    /**
+     * @deprecated since 2.9 replaced by {@link #credentialsId}
+     */
+    @Deprecated
+    private Secret serverAuthenticationToken;
 
-  /**
-   * @since 1.5
-   */
-  private String mojoVersion;
+    /**
+     * @since 1.5
+     */
+    private String mojoVersion;
 
-  // command line arguments
-  private final String additionalProperties;
-  // key/value pairs
-  private final String additionalAnalysisProperties;
+    // command line arguments
+    private String additionalProperties;
+    // key/value pairs
+    private String additionalAnalysisProperties;
 
-  private TriggersConfig triggers;
+    private TriggersConfig triggers;
 
-  private String[] split;
+    private String[] split;
 
-  /**
-   * Maintained to retain compatibility
-   * @deprecated since 2.9
-   */
-  @Deprecated
-  public SonarInstallation(String name,
-    String serverUrl, String serverAuthenticationToken,
-    String mojoVersion, String additionalProperties, TriggersConfig triggers,
-    String additionalAnalysisProperties) {
-    this(name, serverUrl, null, Secret.fromString(StringUtils.trimToNull(serverAuthenticationToken)),
-      mojoVersion, additionalProperties, additionalAnalysisProperties, triggers);
-  }
+    public SonarInstallation() {}
 
-  @DataBoundConstructor
-  public SonarInstallation(
-    String name,
-    String serverUrl,
-    @Nullable String credentialsId,
-    @Nullable Secret serverAuthenticationToken,
-    String mojoVersion,
-    String additionalProperties,
-    String additionalAnalysisProperties,
-    TriggersConfig triggers) {
-    this.name = name;
-    this.serverUrl = serverUrl;
-    this.credentialsId = credentialsId;
-    this.serverAuthenticationToken = serverAuthenticationToken;
-    this.additionalAnalysisProperties = additionalAnalysisProperties;
-    this.mojoVersion = mojoVersion;
-    this.additionalProperties = additionalProperties;
-    this.triggers = triggers;
-  }
-
-  /**
-   * @return all available installations, never <tt>null</tt> but can be empty.
-   * @since 1.7
-   */
-  public static final SonarInstallation[] all() {
-    return SonarGlobalConfiguration.get().getInstallations();
-  }
-
-  public static boolean isValid(String sonarInstallationName, TaskListener listener) {
-    String failureMsg = validationMsg(sonarInstallationName);
-    if (failureMsg != null) {
-      listener.fatalError(failureMsg);
-      return false;
-    }
-    return true;
-  }
-
-  public static void checkValid(String sonarInstallationName) throws AbortException {
-    String failureMsg = validationMsg(sonarInstallationName);
-    if (failureMsg != null) {
-      throw new AbortException(failureMsg);
-    }
-  }
-
-  private static String validationMsg(String sonarInstallationName) {
-    String failureMsg;
-    SonarInstallation sonarInstallation = SonarInstallation.get(sonarInstallationName);
-    if (sonarInstallation == null) {
-      if (StringUtils.isBlank(sonarInstallationName)) {
-        failureMsg = Messages.SonarInstallation_NoInstallation(SonarInstallation.all().length);
-      } else {
-        failureMsg = Messages.SonarInstallation_NoMatchInstallation(sonarInstallationName, SonarInstallation.all().length);
-      }
-      failureMsg += "\n" + Messages.SonarInstallation_FixInstallationTip();
-    } else {
-      failureMsg = null;
-    }
-    return failureMsg;
-  }
-
-  /**
-   * @return installation by name, <tt>null</tt> if not found
-   * @since 1.7
-   */
-  public static final SonarInstallation get(String name) {
-    SonarInstallation[] available = all();
-    if (StringUtils.isEmpty(name) && available.length > 0) {
-      return available[0];
-    }
-    for (SonarInstallation si : available) {
-      if (StringUtils.equals(name, si.getName())) {
-        return si;
-      }
-    }
-    return null;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public String getServerUrl() {
-    return serverUrl;
-  }
-
-  /**
-   * @since 2.9
-   */
-  @CheckForNull
-  public String getServerAuthenticationToken(Run<?, ?> build) {
-    if (credentialsId == null || build == null) {
-      return null;
+    /**
+     * Maintained to retain compatibility
+     *
+     * @deprecated since 2.9
+     */
+    @Deprecated
+    public SonarInstallation(String name, String serverUrl, String serverAuthenticationToken, String mojoVersion,
+            String additionalProperties, TriggersConfig triggers, String additionalAnalysisProperties) {
+        this(name, serverUrl, null, Secret.fromString(StringUtils.trimToNull(serverAuthenticationToken)), mojoVersion,
+                additionalProperties, additionalAnalysisProperties, triggers);
     }
 
-    StringCredentials cred = this.getCredentials(build);
-    if (cred == null) {
-      return null;
+    @DataBoundConstructor
+    public SonarInstallation(String name, String serverUrl, @Nullable String credentialsId,
+            @Nullable Secret serverAuthenticationToken, String mojoVersion, String additionalProperties,
+            String additionalAnalysisProperties, TriggersConfig triggers) {
+        this.name = name;
+        this.serverUrl = serverUrl;
+        this.credentialsId = credentialsId;
+        this.serverAuthenticationToken = serverAuthenticationToken;
+        this.additionalAnalysisProperties = additionalAnalysisProperties;
+        this.mojoVersion = mojoVersion;
+        this.additionalProperties = additionalProperties;
+        this.triggers = triggers;
     }
 
-    return cred.getSecret().getPlainText();
-  }
-
-  public StringCredentials getCredentials(Run<?, ?> build) {
-    return CredentialsProvider.findCredentialById(credentialsId, StringCredentials.class, build);
-  }
-
-  /**
-   * @since 2.9
-   */
-  @SuppressWarnings("unused")
-  public String getCredentialsId() {
-    return credentialsId;
-  }
-
-  /**
-   * @return version of sonar-maven-plugin to use
-   * @since 1.5
-   */
-  @CheckForNull
-  public String getMojoVersion() {
-    return mojoVersion;
-  }
-
-  @CheckForNull
-  public String getAdditionalProperties() {
-    return additionalProperties;
-  }
-
-  @CheckForNull
-  public String getAdditionalAnalysisProperties() {
-    return additionalAnalysisProperties;
-  }
-
-  public String[] getAdditionalAnalysisPropertiesWindows() {
-    if (additionalAnalysisProperties == null) {
-      return new String[0];
+    /**
+     * @return all available installations, never <tt>null</tt> but can be
+     *         empty.
+     * @since 1.7
+     */
+    public static final SonarInstallation[] all() {
+        return SonarGlobalConfiguration.get().getInstallations();
     }
 
-    split = StringUtils.split(additionalAnalysisProperties);
-    for (int i = 0; i < split.length; i++) {
-      split[i] = "/d:" + split[i];
-    }
-    return split;
-  }
-
-  public String[] getAdditionalAnalysisPropertiesUnix() {
-    if (additionalAnalysisProperties == null) {
-      return new String[0];
+    public static boolean isValid(String sonarInstallationName, TaskListener listener) {
+        String failureMsg = validationMsg(sonarInstallationName);
+        if (failureMsg != null) {
+            listener.fatalError(failureMsg);
+            return false;
+        }
+        return true;
     }
 
-    split = StringUtils.split(additionalAnalysisProperties);
-    for (int i = 0; i < split.length; i++) {
-      split[i] = "-D" + split[i];
+    public static void checkValid(String sonarInstallationName) throws AbortException {
+        String failureMsg = validationMsg(sonarInstallationName);
+        if (failureMsg != null) {
+            throw new AbortException(failureMsg);
+        }
     }
-    return split;
-  }
 
-  public TriggersConfig getTriggers() {
-    if (triggers == null) {
-      triggers = new TriggersConfig();
+    private static String validationMsg(String sonarInstallationName) {
+        String failureMsg;
+        SonarInstallation sonarInstallation = SonarInstallation.get(sonarInstallationName);
+        if (sonarInstallation == null) {
+            if (StringUtils.isBlank(sonarInstallationName)) {
+                failureMsg = Messages.SonarInstallation_NoInstallation(SonarInstallation.all().length);
+            } else {
+                failureMsg = Messages.SonarInstallation_NoMatchInstallation(sonarInstallationName,
+                        SonarInstallation.all().length);
+            }
+            failureMsg += "\n" + Messages.SonarInstallation_FixInstallationTip();
+        } else {
+            failureMsg = null;
+        }
+        return failureMsg;
     }
-    return triggers;
-  }
 
-  @SuppressWarnings("deprecation")
-  void migrateTokenToCredential() {
-    if (this.serverAuthenticationToken != null && Util.fixEmpty(this.serverAuthenticationToken.getPlainText()) != null) {
-      this.credentialsId = new GlobalCredentialMigrator().migrate(this.serverAuthenticationToken.getPlainText()).getId();
-      this.serverAuthenticationToken = null;
+    /**
+     * @return installation by name, <tt>null</tt> if not found
+     * @since 1.7
+     */
+    public static final SonarInstallation get(String name) {
+        SonarInstallation[] available = all();
+        if (StringUtils.isEmpty(name) && available.length > 0) {
+            return available[0];
+        }
+        for (SonarInstallation si : available) {
+            if (StringUtils.equals(name, si.getName())) {
+                return si;
+            }
+        }
+        return null;
     }
-  }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getServerUrl() {
+        return serverUrl;
+    }
+
+    /**
+     * @since 2.9
+     */
+    @CheckForNull
+    public String getServerAuthenticationToken(Run<?, ?> build) {
+        if (credentialsId == null || build == null) {
+            return null;
+        }
+
+        StringCredentials cred = this.getCredentials(build);
+        if (cred == null) {
+            return null;
+        }
+
+        return cred.getSecret().getPlainText();
+    }
+
+    public StringCredentials getCredentials(Run<?, ?> build) {
+        return CredentialsProvider.findCredentialById(credentialsId, StringCredentials.class, build);
+    }
+
+    /**
+     * @since 2.9
+     */
+    @SuppressWarnings("unused")
+    public String getCredentialsId() {
+        return credentialsId;
+    }
+
+    /**
+     * @return version of sonar-maven-plugin to use
+     * @since 1.5
+     */
+    @CheckForNull
+    public String getMojoVersion() {
+        return mojoVersion;
+    }
+
+    @CheckForNull
+    public String getAdditionalProperties() {
+        return additionalProperties;
+    }
+
+    @CheckForNull
+    public String getAdditionalAnalysisProperties() {
+        return additionalAnalysisProperties;
+    }
+
+    public String[] getAdditionalAnalysisPropertiesWindows() {
+        if (additionalAnalysisProperties == null) {
+            return new String[0];
+        }
+
+        split = StringUtils.split(additionalAnalysisProperties);
+        for (int i = 0; i < split.length; i++) {
+            split[i] = "/d:" + split[i];
+        }
+        return split;
+    }
+
+    public String[] getAdditionalAnalysisPropertiesUnix() {
+        if (additionalAnalysisProperties == null) {
+            return new String[0];
+        }
+
+        split = StringUtils.split(additionalAnalysisProperties);
+        for (int i = 0; i < split.length; i++) {
+            split[i] = "-D" + split[i];
+        }
+        return split;
+    }
+
+    public TriggersConfig getTriggers() {
+        if (triggers == null) {
+            triggers = new TriggersConfig();
+        }
+        return triggers;
+    }
+
+    @SuppressWarnings("deprecation")
+    void migrateTokenToCredential() {
+        if (this.serverAuthenticationToken != null
+                && Util.fixEmpty(this.serverAuthenticationToken.getPlainText()) != null) {
+            this.credentialsId = new GlobalCredentialMigrator().migrate(this.serverAuthenticationToken.getPlainText())
+                    .getId();
+            this.serverAuthenticationToken = null;
+        }
+    }
+
+    public Secret getServerAuthenticationToken() {
+        return serverAuthenticationToken;
+    }
+
+    public void setServerAuthenticationToken(Secret serverAuthenticationToken) {
+        this.serverAuthenticationToken = serverAuthenticationToken;
+    }
+
+    public String[] getSplit() {
+        return split;
+    }
+
+    public void setSplit(String[] split) {
+        this.split = split;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setServerUrl(String serverUrl) {
+        this.serverUrl = serverUrl;
+    }
+
+    public void setCredentialsId(String credentialsId) {
+        this.credentialsId = credentialsId;
+    }
+
+    public void setMojoVersion(String mojoVersion) {
+        this.mojoVersion = mojoVersion;
+    }
+
+    public void setAdditionalProperties(String additionalProperties) {
+        this.additionalProperties = additionalProperties;
+    }
+
+    public void setAdditionalAnalysisProperties(String additionalAnalysisProperties) {
+        this.additionalAnalysisProperties = additionalAnalysisProperties;
+    }
+
+    public void setTriggers(TriggersConfig triggers) {
+        this.triggers = triggers;
+    }
+
 }
